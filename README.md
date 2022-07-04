@@ -2,6 +2,25 @@
 
 Our source code is based on an open deep learning compiler stack Apache TVM (https://github.com/apache/tvm) and Microsoft nni (https://github.com/microsoft/nni).
 
+# Abstract
+Mobile devices run deep learning models for various purposes, such as image classification and speech recognition. Due to the resource constraints of mobile devices, researchers have focused on either making a lightweight deep neural network (DNN) model using model pruning or generating an efficient code using compiler optimization. Surprisingly, we found that the straightforward integration between model compression and compiler auto-tuning often does not produce the most efficient model for a target device. We propose CPrune, a compiler-informed model pruning for efficient target-aware DNN execution to support an application with a required target accuracy. CPrune makes a lightweight DNN model through informed pruning based on the structural information of subgraphs built during the compiler tuning process. Our experimental results show that CPrune increases the DNN execution speed up to 2.73x compared to the state-of-the-art TVM auto-tune while satisfying the accuracy requirement.
+
+# Motivation
+![example_v2](https://user-images.githubusercontent.com/47049810/177085650-eab0d6fd-bf73-47ae-8931-ad5f325abc29.png)
+An experiment to find the fastest model whose accuracy is higher than 92.80% accuracy for the target device among various pruned models of VGG-16 for CIFAR-10. The best model with pruning does not guarantee the best after compiler optimization. For example, the best model with pruning achieves only 2174 FPS (figures per second) while the suboptimal one after pruning obtains a higher 2857 FPS after compiler optimization.
+
+# Overview
+![overview_rev11](https://user-images.githubusercontent.com/47049810/177086104-6727c3a7-208c-4004-af6a-02dce96cdc9f.png)
+The goal of CPrune is to find and prune neurons that largely impact the execution of the DNN model on the target device while meeting the accuracy requirements. This informed pruning effectively prevents the issue of the best pruning model not being the best on the target device after compilation.
+
+The above depicts how CPrune leverages the information collected during compiler optimization to prune neurons from the DNN model effectively. The shaded boxes indicate what CPrune adds to the existing compiler optimization framework. A DNN model consists of many convolutional layers, each of which is represented as a subgraph (1). A subgraph is assigned to a task, and multiple same subgraphs can point to the same task. Then, a DNN compiler creates numerous intermediate representations for each task and selects the fastest program on the target device (2). After compiling the aggregate of the fastest programs comprising a DNN model, CPrune checks if the model meets the minimum execution and accuracy requirements. 
+After that, CPrune sorts tasks based on their execution times in descending order to find the most efficient model with further pruning. Since a task of a longer execution time could reduce the execution time of a model significantly, CPrune selects the most time-consuming task as a candidate for further pruning (3).
+CPrune now needs to know which subgraph(s) is associated with this task as pruning candidates. To preserve the program structure of the fastest execution, we also store the fastest program for each task. For this purpose, CPrune builds a table keeping the relationship among tasks, subgraphs, and programs (4). Finally, CPrune prunes subgraphs of the selected task while ensuring their code structures follow the structure of the fastest program of that task (5). Since the computation structure impacts the execution time, preserving the same computation structure after pruning is critical for efficient pruning. This process continues to make the most efficient pruned DNN model satisfying the accuracy requirement.
+
+# Experimental Results
+<img width="650" alt="table1" src="https://user-images.githubusercontent.com/47049810/177086838-9aff036c-550f-455a-be1d-bdc723160d9b.png">
+We compare CPrune with other pruning schemes on different mobile platforms, as shown the above table. CPrune shows a higher FPS than the model-based pruning models (e.g., PQF, FPGM, AMC). CPrune also shows similar or better performance than the hardware-aware pruning model (e.g., NetAdapt) with TVM. It also shows that indirect metrics such as FLOPS and parameters do not fully reflect actual performance. While FLOPS is a suitable indirect measure of the extent of compression obtained during the pruning process, FPS suitably reflects the pruning gains in terms of execution times or speeds.
+
 # How to set up
 ## Host PC side
 ### Install nvidia-container-runtime
